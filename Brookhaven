@@ -1,20 +1,79 @@
---[[
-     ════════════════════════════════════════════════════╗
-    ║                    DARK x HUB v1.0 FINAL                  ║
-    ║              Brookhaven RP Script - by Carlolx777        ║
-    ║                  Executor: Delta Compatible               ║
-    ╚══════════════════════════════════════════════════════════════╝
-]]
+ local StarterGui = game:GetService("StarterGui")
 
-local Players = game:GetService("Players")
-local StarterGui = game:GetService("StarterGui")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Workspace = game:GetService("Workspace")
-local RunService = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
+--noticaçãotificação visual no jogo
+StarterGui:SetCore("SendNotification", {
+    Title = "DARK x HUB",
+    Text = "Script carregado com sucesso!",
+    Duration = 5,
+    Icon = "rbxassetid://131153193945220"
+})
 
-local LocalPlayer = Players.LocalPlayer
-local Camera = Workspace.CurrentCamera
+print("═══════════════════════════════════════════════════════════════")
+print("        DARK x HUB - Brookhaven RP Script 🎉")
+print("═══════════════════════════════════════════════════════════════")
+print("Developer: Carlolx777")
+print("Version: 1.0 FINAL")
+print("Executor: Delta Compatible")
+print("═══════════════════════════════════════════════════════════════")
+print("Script carregado com sucesso!")
+print("═══════════════════════════════════════════════════════════════")
+
+-- DARK x HUB - VERSÃO V1.0 (CAR UPDATE)
+-- Loading Dark Hub + Movimento + Troll + Teleportes + Visual + Casas + Carro (Bring/Fly)
+
+-- 1. TELA DE CARREGAMENTO
+local playerGui = game.Players.LocalPlayer:WaitForChild("PlayerGui")
+local loadingGui = Instance.new("ScreenGui", playerGui)
+loadingGui.Name = "DarkHubLoading"
+loadingGui.ResetOnSpawn = false
+loadingGui.IgnoreGuiInset = true
+
+local background = Instance.new("Frame", loadingGui)
+background.Size = UDim2.new(1, 0, 1, 0)
+background.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+background.BorderSizePixel = 0
+
+local frame = Instance.new("Frame", background)
+frame.Size = UDim2.new(0, 400, 0, 120)
+frame.Position = UDim2.new(0.5, 0, 0.5, 0)
+frame.AnchorPoint = Vector2.new(0.5, 0.5)
+frame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+frame.BorderSizePixel = 0
+
+local title = Instance.new("TextLabel", frame)
+title.Size = UDim2.new(1, 0, 0.4, 0)
+title.Text = "Dark x Hub"
+title.TextColor3 = Color3.fromRGB(200, 0, 0)
+title.BackgroundTransparency = 1
+title.Font = Enum.Font.GothamBold
+title.TextScaled = true
+
+local percentLabel = Instance.new("TextLabel", frame)
+percentLabel.Size = UDim2.new(1, 0, 0.3, 0)
+percentLabel.Position = UDim2.new(0, 0, 0.4, 0)
+percentLabel.Text = "0%"
+percentLabel.TextColor3 = Color3.fromRGB(200, 0, 0)
+percentLabel.BackgroundTransparency = 1
+percentLabel.Font = Enum.Font.Gotham
+percentLabel.TextScaled = true
+
+local progressBar = Instance.new("Frame", frame)
+progressBar.Size = UDim2.new(0, 0, 0.2, 0)
+progressBar.Position = UDim2.new(0, 0, 0.8, 0)
+progressBar.BackgroundColor3 = Color3.fromRGB(200, 0, 0)
+
+local steps = 100
+for i = 1, steps do
+    percentLabel.Text = i .. "%"
+    progressBar.Size = UDim2.new(i / 100, 0, 0.2, 0)
+    task.wait(0.01)
+end
+loadingGui:Destroy()
+
+-- --- CARREGAMENTO E VARIÁVEIS ---
+
+local redzlib = loadstring(game:HttpGet("https://raw.githubusercontent.com/wx-sources/VictoryLib/refs/heads/main/Redzhubui%20(1).txt"))()
+local vu2 = loadstring(game:HttpGet("https://raw.githubusercontent.com/Laelmano24/brookhaven-tool/refs/heads/main/src/main.luau"))()
 
 -- Variáveis Globais
 _G.SelectedPlayer = ""
@@ -46,6 +105,23 @@ local Settings = {
     JumpPower = 50,
     Gravity = 192.2,
 }
+
+local function GetPlayerNames()
+    local names = {}
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= LocalPlayer then table.insert(names, p.Name) end
+    end
+    return names
+end
+
+local function UpdateMovement()
+    local char = LocalPlayer.Character
+    if char and char:FindFirstChild("Humanoid") then
+        char.Humanoid.WalkSpeed = Settings.WalkSpeed
+        char.Humanoid.JumpPower = Settings.JumpPower
+    end
+    Workspace.Gravity = Settings.Gravity
+end
 -- Variáveis para Lag e Audio
 local toggles = { LagLaptop = false, LagPhone = false }
 local BombActive = false
@@ -57,6 +133,24 @@ local keywords = { "bomb", "soccer", "boat" }
 local carKeyword = "car"
 local wheelKeyword = "wheel"
 local AntiWeaponConn = nil
+
+local function detectExecutor()
+    if identifyexecutor then
+        return identifyexecutor()
+    elseif syn then
+        return "Synapse X"
+    elseif KRNL_LOADED then
+        return "KRNL"
+    elseif is_sirhurt_closure then
+        return "SirHurt"
+    elseif pebc_execute then
+        return "ProtoSmasher"
+    elseif getexecutorname then
+        return getexecutorname()
+    else
+        return "Executor Desconhecido"
+    end
+end
 
 -- --- FUNÇÃO ANTI-LAG ---
 local function ApplyAntiLag(state)
@@ -374,35 +468,6 @@ local function getPlayerNames()
     for _, p in pairs(vu6:GetPlayers()) do if p ~= vu7 then table.insert(pNames, p.Name) end end
     return pNames
 end
--- ==================== FUNÇÕES BÁSICAS ====================
-local function ShowNotification(title, text, duration)
-    StarterGui:SetCore("SendNotification", {
-        Title = title,
-        Text = text,
-        Duration = duration or 5,
-        Icon = "rbxassetid://131153193945220"
-    })
-end
-
-local function GetPlayerNames()
-    local names = {}
-    for _, p in ipairs(Players:GetPlayers()) do
-        if p ~= LocalPlayer then table.insert(names, p.Name) end
-    end
-    return names
-end
-
-local function UpdateMovement()
-    local char = LocalPlayer.Character
-    if char and char:FindFirstChild("Humanoid") then
-        char.Humanoid.WalkSpeed = Settings.WalkSpeed
-        char.Humanoid.JumpPower = Settings.JumpPower
-    end
-    Workspace.Gravity = Settings.Gravity
-end
-
--- ==================== UI ====================
-local redzlib = loadstring(game:HttpGet("https://raw.githubusercontent.com/minhdepzai-v/LibraryRobloc/refs/heads/main/RedzLibrary.lua"))()
 
 local Window = redzlib:MakeWindow({
     Title = "DARK x HUB",
