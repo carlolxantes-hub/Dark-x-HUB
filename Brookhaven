@@ -46,7 +46,334 @@ local Settings = {
     JumpPower = 50,
     Gravity = 192.2,
 }
+-- Variáveis para Lag e Audio
+local toggles = { LagLaptop = false, LagPhone = false }
+local BombActive = false
+local selectedAudioID
 
+-- Variáveis da Aba Antis
+local antiToolSit, antiCarSit, antiVehicleCollision = false, false, false
+local keywords = { "bomb", "soccer", "boat" }
+local carKeyword = "car"
+local wheelKeyword = "wheel"
+local AntiWeaponConn = nil
+
+-- --- FUNÇÃO ANTI-LAG ---
+local function ApplyAntiLag(state)
+    if state then
+        game:GetService("Lighting").GlobalShadows = false
+        game:GetService("Lighting").FogEnd = 9e9
+        settings().Rendering.QualityLevel = 1
+        for _, v in pairs(vu9:GetDescendants()) do
+            if v:IsA("BasePart") then
+                v.Material = Enum.Material.SmoothPlastic
+            elseif v:IsA("Decal") or v:IsA("Texture") then
+                v.Transparency = 1
+            elseif v:IsA("ParticleEmitter") or v:IsA("Trail") then
+                v.Enabled = false
+            end
+        end
+    else
+        game:GetService("Lighting").GlobalShadows = true
+        for _, v in pairs(vu9:GetDescendants()) do
+            if v:IsA("BasePart") then
+                v.Material = Enum.Material.Plastic
+            elseif v:IsA("Decal") or v:IsA("Texture") then
+                v.Transparency = 0
+            elseif v:IsA("ParticleEmitter") or v:IsA("Trail") then
+                v.Enabled = true
+            end
+        end
+    end
+end
+
+-- --- FUNÇÕES DE SUPORTE ---
+local function applyCollisionLogic(obj)
+    if not obj:IsA("BasePart") then return end
+    local name = obj.Name:lower()
+    local isCar = false
+    local parent = obj
+    while parent do
+        if parent.Name:lower():find(carKeyword) then isCar = true break end
+        parent = parent.Parent
+    end
+    if isCar then obj.CanCollide = not antiCarSit end
+end
+
+local function updateSitState()
+    local hum = vu7.Character and vu7.Character:FindFirstChildOfClass("Humanoid")
+    if hum then
+        hum:SetStateEnabled(Enum.HumanoidStateType.Seated, not (antiToolSit or antiCarSit))
+        if (antiToolSit or antiCarSit) and hum.Sit then hum.Sit = false end
+    end
+end
+
+-- --- FUNÇÕES HEADSIT ---
+local function headsitOnPlayer(targetPlayer)
+    if not targetPlayer or not targetPlayer.Character then return end
+    local char = vu7.Character
+    local root = char:FindFirstChild("HumanoidRootPart")
+    local tHead = targetPlayer.Character:FindFirstChild("Head")
+    if root and tHead then
+        root.CFrame = tHead.CFrame * CFrame.new(0, 2.2, 0)
+        local weld = Instance.new("WeldConstraint", root)
+        weld.Part0 = root
+        weld.Part1 = tHead
+        char.Humanoid.Sit = true
+    end
+end
+
+local function removeHeadsit()
+    if vu7.Character and vu7.Character:FindFirstChild("HumanoidRootPart") then
+        for _, v in pairs(vu7.Character.HumanoidRootPart:GetChildren()) do
+            if v:IsA("WeldConstraint") then v:Destroy() end
+        end
+        vu7.Character.Humanoid.Sit = false
+    end
+end
+
+-- Função para o Lag (ClickDetector)
+local function clickNormally(object)
+    local clickDetector = object:FindFirstChildWhichIsA("ClickDetector")
+    if clickDetector then fireclickdetector(clickDetector) end
+end
+
+local function FlingBall(targetName)
+    local target = game:GetService("Players"):FindFirstChild(targetName)
+    if not target then return end
+    local players = game:GetService("Players")
+    local player = players.LocalPlayer
+    local character = player.Character or player.CharacterAdded:Wait()
+    local humanoid = character:WaitForChild("Humanoid")
+    local backpack = player:WaitForChild("Backpack")
+    local ServerBalls = workspace.WorkspaceCom:WaitForChild("001_SoccerBalls")
+    local function GetBall()
+        if not backpack:FindFirstChild("SoccerBall") then
+            game:GetService("ReplicatedStorage").RE:FindFirstChild("1Too1l"):InvokeServer("PickingTools", "SoccerBall")
+        end
+        repeat task.wait() until backpack:FindFirstChild("SoccerBall")
+        backpack.SoccerBall.Parent = character
+        repeat task.wait() until ServerBalls:FindFirstChild("Soccer" .. player.Name)
+        character.SoccerBall.Parent = backpack
+        return ServerBalls:FindFirstChild("Soccer" .. player.Name)
+    end
+
+    local Ball = ServerBalls:FindFirstChild("Soccer" .. player.Name) or GetBall()
+    Ball.CanCollide = false
+    Ball.Massless = true
+    Ball.CustomPhysicalProperties = PhysicalProperties.new(0.0001, 0, 0)
+
+    if target ~= player then
+        local tchar = target.Character
+        if tchar and tchar:FindFirstChild("HumanoidRootPart") and tchar:FindFirstChild("Humanoid") then
+            local troot = tchar.HumanoidRootPart
+            local thum = tchar.Humanoid
+            
+            if Ball:FindFirstChildWhichIsA("BodyVelocity") then
+                Ball:FindFirstChildWhichIsA("BodyVelocity"):Destroy()
+            end
+            
+            local bv = Instance.new("BodyVelocity")
+            bv.Name = "FlingPower"
+            bv.Velocity = Vector3.new(9e8, 9e8, 9e8)
+            bv.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+            bv.P = 9e900
+            bv.Parent = Ball
+            
+            workspace.CurrentCamera.CameraSubject = thum
+            
+            local connection
+            connection = vu10.Heartbeat:Connect(function()
+                if not tchar or not tchar:IsDescendantOf(workspace) or thum.Health <= 0 or target.Parent ~= players or troot.Velocity.Magnitude > 1000 then
+                    workspace.CurrentCamera.CameraSubject = humanoid
+                    connection:Disconnect()
+                    return
+                end
+                
+                if troot.Velocity.Magnitude > 0 then
+                    local pos_x = troot.Position.X + (troot.Velocity.X / 1.5)
+                    local pos_y = troot.Position.Y + (troot.Velocity.Y / 1.5)
+                    local pos_z = troot.Position.Z + (troot.Velocity.Z / 1.5)
+                    Ball.CFrame = CFrame.new(Vector3.new(pos_x, pos_y, pos_z))
+                    Ball.Orientation += Vector3.new(45, 60, 30)
+                else
+                    for _, v in pairs(tchar:GetChildren()) do
+                        if v:IsA("BasePart") and v.CanCollide and not v.Anchored then
+                            Ball.CFrame = v.CFrame
+                        end
+                    end
+                end
+            end)
+        end
+    end
+end
+local function updateCamera()
+    pcall(function()
+        if viewEnabled then
+            local target = vu6:FindFirstChild(_G.SelectedPlayer)
+            if target and target.Character and target.Character:FindFirstChild("Humanoid") then
+                vuCam.CameraSubject = target.Character.Humanoid
+            end
+        else
+            if vu7.Character and vu7.Character:FindFirstChild("Humanoid") then
+                vuCam.CameraSubject = vu7.Character.Humanoid
+            end
+        end
+    end)
+end
+
+local function SetupBlackHole()
+    if not BH_Part then
+        BH_Part = Instance.new("Part")
+        BH_Part.Name = "BH_TargetPart"
+        BH_Part.Anchored = true
+        BH_Part.CanCollide = false
+        BH_Part.Transparency = 1
+        BH_Part.Parent = vu9
+        BH_Attachment = Instance.new("Attachment", BH_Part)
+    end
+end
+
+if not getgenv().NetworkBypassed then
+    getgenv().NetworkBypassed = true
+    task.spawn(function()
+        while true do
+            pcall(function()
+                sethiddenproperty(vu7, "SimulationRadius", math.huge)
+            end)
+            vu10.Heartbeat:Wait()
+        end
+    end)
+end
+
+local function ForcePart(v)
+    if v:IsA("BasePart") and not v.Anchored and not v.Parent:FindFirstChildOfClass("Humanoid") and v.Name ~= "Handle" then
+        for _, x in ipairs(v:GetChildren()) do
+            if x:IsA("BodyMover") or x:IsA("AlignPosition") or x:IsA("Torque") then x:Destroy() end
+        end
+        v.CanCollide = false
+        local torque = Instance.new("Torque", v)
+        torque.Torque = Vector3.new(100000000, 1000000000, 100000000)
+        local att0 = Instance.new("Attachment", v)
+        torque.Attachment0 = att0
+        local alignPos = Instance.new("AlignPosition", v)
+        alignPos.Name = "BH_Force"
+        alignPos.MaxForce = math.huge
+        alignPos.MaxVelocity = math.huge
+        alignPos.Responsiveness = _G.BH_Strength
+        alignPos.Attachment0 = att0
+        alignPos.Attachment1 = BH_Attachment
+    end
+end
+
+local function PulseLoop(targetPlayer, actionCallback)
+    _G.IsTrapping = true
+    local PosOriginal = vu7.Character.HumanoidRootPart.CFrame
+    vu8.RE["1Too1l"]:InvokeServer("PickingTools", "Couch")
+    
+    local connection
+    connection = vu10.Heartbeat:Connect(function()
+        if not _G.IsTrapping or not targetPlayer.Character then 
+            connection:Disconnect() 
+            return 
+        end
+        
+        local THRP = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+        local THum = targetPlayer.Character:FindFirstChild("Humanoid")
+        
+        if THRP and THum then
+            local Tool = vu7.Backpack:FindFirstChild("Couch") or vu7.Character:FindFirstChild("Couch")
+            if Tool then vu7.Character.Humanoid:EquipTool(Tool) end
+            
+            local timer = tick() * 14 
+            local dist = math.sin(timer) * 8 -- Movimento de entra e sai
+            
+            vu7.Character.HumanoidRootPart.CFrame = THRP.CFrame * CFrame.new(0, 0.5, dist) * CFrame.Angles(0, timer, 0)
+            vu7.Character.HumanoidRootPart.Velocity = Vector3.new(0,0,0)
+            
+            if THum.Sit then
+                connection:Disconnect()
+                actionCallback(PosOriginal)
+            end
+        end
+    end)
+end
+
+local function FinalReset()
+    _G.IsTrapping = false
+    _G.FlingToggle = false
+    pcall(function()
+        vu7.Character.Humanoid:UnequipTools()
+        vu8.RE["1Clea1rToo1ls"]:FireServer("PlayerWantsToDeleteTool", "ClearAllTools")
+    end)
+end
+
+local function getPlayerNames()
+    local pNames = {}
+    for _, p in pairs(vu6:GetPlayers()) do if p ~= vu7 then table.insert(pNames, p.Name) end end
+    return pNames
+end
+
+local function TeleportTo(cframe)
+    if vu7.Character and vu7.Character:FindFirstChild("HumanoidRootPart") then
+        vu7.Character:PivotTo(cframe)
+    end
+end
+local vu6 = game:GetService("Players")
+local vu7 = vu6.LocalPlayer
+local vu8 = game:GetService("ReplicatedStorage")
+local vu9 = game:GetService("Workspace")
+local vu10 = game:GetService("RunService")
+local vuCam = vu9.CurrentCamera
+
+-- Variáveis de Controle
+local walkSpeed, jumpPower, gravity = 16, 50, 192.2
+local viewEnabled = false
+_G.AntiSit = false
+_G.AntiVoid = false
+_G.RGBName = false
+_G.RainbowBio = false
+
+-- 3. FUNÇÕES DE SISTEMA
+local function updateMovement()
+    local char = vu7.Character
+    if char and char:FindFirstChild("Humanoid") then
+        char.Humanoid.WalkSpeed = walkSpeed
+        char.Humanoid.JumpPower = jumpPower
+        char.Humanoid.UseJumpPower = true
+    end
+    vu9.Gravity = gravity
+end
+local function updateCamera()
+    if viewEnabled then
+        local T = vu6:FindFirstChild(_G.SelectedPlayer)
+        if T and T.Character and T.Character:FindFirstChildOfClass("Humanoid") then
+            vuCam.CameraSubject = T.Character:FindFirstChildOfClass("Humanoid")
+        end
+    else
+        vuCam.CameraSubject = vu7.Character:FindFirstChildOfClass("Humanoid")
+    end
+end
+local function FinalReset()
+    _G.IsTrapping = false
+    pcall(function()
+        local root = vu7.Character.HumanoidRootPart
+        root.Velocity = Vector3.new(0,0,0)
+        for _, p in pairs(vu7.Character:GetChildren()) do if p:IsA("BasePart") then p.CanCollide = true end end
+    end)
+end
+
+local function TeleportTo(cframe)
+    local char = vu7.Character
+    if char and char:FindFirstChild("HumanoidRootPart") then
+        char:PivotTo(cframe)
+    end
+end
+local function getPlayerNames()
+    local pNames = {}
+    for _, p in pairs(vu6:GetPlayers()) do if p ~= vu7 then table.insert(pNames, p.Name) end end
+    return pNames
+end
 -- ==================== FUNÇÕES BÁSICAS ====================
 local function ShowNotification(title, text, duration)
     StarterGui:SetCore("SendNotification", {
